@@ -1,5 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../constants/Config';
+import { CustomButton } from '../../components/CustomButton';
+import { logoutUser } from '../../methods/auth/auth';
 
 export default function HomeScreen() {
   const { colors, spacing } = useAppTheme();
@@ -16,6 +18,12 @@ export default function HomeScreen() {
       <Text style={{ color: colors.text, fontSize: 24, fontWeight: 'bold' }}>
         FitPro Home
       </Text>
+      <CustomButton
+        title='logout'
+        disabled={false}
+        loading={false}
+        onPress={logoutUser}
+      ></CustomButton>
     </View>
   );
 }
