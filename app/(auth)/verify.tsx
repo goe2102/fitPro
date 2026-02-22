@@ -11,6 +11,8 @@ import { CustomButton } from '../../components/CustomButton';
 import { resendVerification, logoutUser } from '../../methods/auth/auth';
 import { auth } from '../../constants/FirebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
+import { Stack } from 'expo-router';
+import { updateCurrentUser } from 'firebase/auth';
 
 export default function VerifyScreen() {
   const { colors, spacing } = useAppTheme();
@@ -19,11 +21,21 @@ export default function VerifyScreen() {
 
   const checkVerification = async () => {
     setLoading(true);
-    await auth.currentUser?.reload();
-    if (!auth.currentUser?.emailVerified) {
-      Alert.alert('Not verified yet', 'Please tap the link in your email first.');
+    try {
+      await auth.currentUser?.reload(); // Refresh from server
+
+      if (auth.currentUser?.emailVerified) {
+        // 2. THE MAGIC FIX: Force Firebase to broadcast the updated data to React!
+        await updateCurrentUser(auth, auth.currentUser);
+        // Your _layout.tsx will instantly detect the change and kick you to the main app (tabs)
+      } else {
+        Alert.alert('Not Verified', 'Please check your email and click the link.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Could not check verification status.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleResend = async () => {
@@ -40,6 +52,15 @@ export default function VerifyScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+
+      <Stack.Screen
+        options={{
+          gestureEnabled: false, // Disables iOS swipe back
+          headerBackVisible: false, // Hides back button if header is showing
+          headerLeft: () => null, // Strictly removes any default back arrow
+        }}
+      />
+
       <View
         style={[
           styles.content,
