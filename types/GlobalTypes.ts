@@ -23,9 +23,12 @@ export interface Recipe {
 
   ingredients: Ingredient[];
   difficulty: DifficultyLevel;
-
   prepTimeMinutes?: number;
   instructions?: string[];
+  portions: number;
+  prepTime: number;
+  cookTime: number;
+
   imageUrl?: string;
   isVegan?: boolean;
 
