@@ -18,12 +18,6 @@ export default function HomeScreen() {
       <Text style={{ color: colors.text, fontSize: 24, fontWeight: 'bold' }}>
         FitPro Home
       </Text>
-      <CustomButton
-        title='logout'
-        disabled={false}
-        loading={false}
-        onPress={logoutUser}
-      ></CustomButton>
     </View>
   );
 }
