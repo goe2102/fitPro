@@ -18,14 +18,18 @@ export interface Recipe {
 
   id: string;
   title: string;
+  isPublic: boolean;
+  createdAt: number;
+
   ingredients: Ingredient[];
-  rating: number;
   difficulty: DifficultyLevel;
 
   prepTimeMinutes?: number;
   instructions?: string[];
   imageUrl?: string;
   isVegan?: boolean;
+
+  likeCount: number;
 
   calories?: number;
   protein?: number;
