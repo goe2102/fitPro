@@ -47,7 +47,7 @@ const DetailsTwoScreen = () => {
         gender: gender,
       }, {merge: true});
       
-      router.push('/detailsThree');
+      router.push({pathname: '/detailsThree', params: {currentWeight: safeParseNumber(weight)}});
     } catch (error) {
       console.error("Error putting Birhtday to FireStrore: ", error);
     } finally {

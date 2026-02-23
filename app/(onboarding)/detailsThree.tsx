@@ -1,15 +1,22 @@
 import React, { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '../../constants/Config';
 import { CustomButton } from '../../components/CustomButton';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CustomGenderPicker } from '../../components/CustomGenderPicker';
 import { CustomInput } from '../../components/CustomInput';
 import { useAuth } from '../../context/AuthContext';
 import { CustomGoalPicker } from '../../components/CustomGoalPicker';
+import { DatePicker } from '../../components/CustomDatePicker';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../../constants/FirebaseConfig';
+import { safeParseNumber } from '../../methods/utils/stringToNumber';
 
 const DetailsThreeScreen = () => {
+
+  const params = useLocalSearchParams();
+  const currentWeight = Number(params.currentWeight);
 
   const { colors, spacing } = useAppTheme();
   const { user } = useAuth();
@@ -21,8 +28,45 @@ const DetailsThreeScreen = () => {
   const [aimedWeight, setAimedWeight] = useState('');
   const [goal, setGoal] = useState<string | null>('weight_maintaining');
 
-  const handleSubmit = () => {
+  const [aimedDate, setAimedDate] = useState(new Date());
 
+  const disabled = (goal !== 'weight_maintaining' && !aimedWeight.trim());
+
+  const handleSubmit = async () => {
+    if (!user) {
+      Alert.alert("Error", "You must be logged in to save this data.");
+      return;
+    }
+
+    if (goal === 'weight_loss' && safeParseNumber(aimedWeight) >= currentWeight) {
+      Alert.alert("Error", "You want to lose weight but your aimed Weight is higher than your previous submitted current weight");
+      return;
+    }
+
+    if (goal === 'weight_gaining' && safeParseNumber(aimedWeight) <= currentWeight) {
+      Alert.alert("Error", "You want to gain weight but your aimed Weight is lower than your previous submitted current weight");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const userRef = doc(db, 'users', user.uid);
+
+      const submitAim = safeParseNumber(aimedWeight);
+
+      await setDoc(userRef, {
+        aimedWeight: submitAim,
+        aimedDate: aimedDate.toISOString(),
+        goal: goal,
+        isOnboarded: true,
+      }, {merge: true});
+      
+    } catch (error) {
+      console.error("Error putting goals to FireStrore: ", error);
+    } finally {
+      setLoading(false);
+    }
   }
 
 return (
@@ -65,6 +109,34 @@ return (
           <CustomGoalPicker value={goal} onChange={setGoal} />
         </View>
 
+
+        <View style={{ height: 20 }} />
+
+        {goal !== 'weight_maintaining' && (
+          <View>
+            <Text style={[styles.description, { color: colors.text }]}>
+              Your weight Goal:
+            </Text>
+            <CustomInput
+              value={aimedWeight}
+              label='Aimed Weight'
+              onChangeText={(t) => setAimedWeight(t)}
+              keyboardType='numeric'
+            />
+
+            <View style={{ height: 20 }} />
+
+            <Text style={[styles.description, { color: colors.text }]}>
+              When do you want to achive it?
+            </Text>
+            <DatePicker 
+              mode='future'
+              value={aimedDate}
+              onChange={(d) => setAimedDate(d)}
+            />
+          </View>
+        )}
+
         </View>
       </ScrollView>
 
@@ -82,6 +154,7 @@ return (
           title="Next Step"
           onPress={handleSubmit}
           loading={loading}
+          disabled={disabled}
         />
       </View>
     </KeyboardAvoidingView>
@@ -95,7 +168,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   root: { flex: 1 },
-  scroll: { flexGrow: 1, paddingBottom: 120 },
+  scroll: { flexGrow: 1, paddingBottom: 140 },
   eyebrow: {
     fontSize: 13,
     fontWeight: '600',
@@ -109,6 +182,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.5,
     marginBottom: 8,
+  },
+  description: {
+    fontSize: 15,
+    letterSpacing: 0.1,
+    marginBottom: 14,
+    fontWeight: '500'
   },
   footer: {
     position: 'absolute',

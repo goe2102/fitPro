@@ -1,343 +1,461 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
-  FlatList,
-  StyleSheet,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-  ViewToken,
   Pressable,
+  StyleSheet,
+  Animated,
+  Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../constants/Config';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type DatePickerMode = 'past' | 'future' | 'any';
 
 interface DatePickerProps {
   value: Date;
   onChange: (date: Date) => void;
-  mode?: DatePickerMode; // 'past' = only allow dates <= today, 'future' = only >= today
+  mode?: DatePickerMode;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────────
 
-const ITEM_HEIGHT = 48;
-const VISIBLE_ITEMS = 5; // must be odd
-const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
-
+const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-const today = new Date();
-today.setHours(0, 0, 0, 0);
+const todayMidnight = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
 
 function daysInMonth(month: number, year: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 
-function clamp(val: number, min: number, max: number) {
-  return Math.min(Math.max(val, min), max);
+function startDayOfMonth(month: number, year: number) {
+  return new Date(year, month, 1).getDay();
 }
 
-// ─── Single Column ────────────────────────────────────────────────────────────
+// ─── Month/Year Header Picker ──────────────────────────────────────────────────
 
-interface ColumnProps {
-  data: { value: number; label: string; disabled: boolean }[];
-  selectedIndex: number;
-  onSelect: (index: number) => void;
-  width: number;
+interface HeaderPickerProps {
+  year: number;
+  month: number;
+  mode: DatePickerMode;
+  onPrev: () => void;
+  onNext: () => void;
+  onMonthPress: () => void;
 }
 
-function Column({ data, selectedIndex, onSelect, width }: ColumnProps) {
+function CalendarHeader({ year, month, mode, onPrev, onNext, onMonthPress }: HeaderPickerProps) {
   const { colors } = useAppTheme();
-  const listRef = useRef<FlatList>(null);
-  const currentIndex = useRef(selectedIndex);
 
-  // Pad top and bottom so selected item can center
-  const PADDING = Math.floor(VISIBLE_ITEMS / 2);
-  const paddedData = [
-    ...Array(PADDING).fill({ value: -1, label: '', disabled: true }),
-    ...data,
-    ...Array(PADDING).fill({ value: -1, label: '', disabled: true }),
-  ];
+  const today = todayMidnight;
+  const viewDate = new Date(year, month, 1);
 
-  useEffect(() => {
-    const target = selectedIndex + PADDING;
-    listRef.current?.scrollToIndex({ index: target, animated: false });
-  }, []);
+  // Can we go back?
+  const canGoPrev = mode === 'any' ||
+    (mode === 'past' ? true : viewDate > new Date(today.getFullYear(), today.getMonth(), 1));
 
-  // Snap to nearest item on scroll end
-  const handleScrollEnd = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const offsetY = e.nativeEvent.contentOffset.y;
-      const rawIndex = Math.round(offsetY / ITEM_HEIGHT);
-      const dataIndex = clamp(rawIndex, 0, data.length - 1);
-
-      if (!data[dataIndex].disabled) {
-        onSelect(dataIndex);
-        currentIndex.current = dataIndex;
-      } else {
-        // Snap back to last valid
-        const target = (currentIndex.current + PADDING) * ITEM_HEIGHT;
-        listRef.current?.scrollToOffset({ offset: target, animated: true });
-      }
-    },
-    [data, onSelect, PADDING],
-  );
-
-  const renderItem = ({ item, index }: { item: typeof paddedData[0]; index: number }) => {
-    const dataIndex = index - PADDING;
-    const isSelected = dataIndex === selectedIndex;
-    const isEmpty = item.value === -1;
-    const isDisabled = item.disabled && !isEmpty;
-
-    return (
-      <Pressable
-        style={[styles.item, { height: ITEM_HEIGHT, width }]}
-        onPress={() => {
-          if (!isDisabled && !isEmpty) {
-            onSelect(dataIndex);
-            listRef.current?.scrollToIndex({ index, animated: true });
-          }
-        }}
-      >
-        <Text
-          style={[
-            styles.itemText,
-            {
-              color: isSelected
-                ? colors.primary
-                : isDisabled
-                  ? colors.tabIconDefault + '40'
-                  : colors.text + (isEmpty ? '00' : 'BB'),
-              fontWeight: isSelected ? '700' : '400',
-              fontSize: isSelected ? 18 : 16,
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {item.label}
-        </Text>
-      </Pressable>
-    );
-  };
+  // Can we go forward?
+  const canGoNext = mode === 'any' ||
+    (mode === 'future' ? true : viewDate < new Date(today.getFullYear(), today.getMonth(), 1));
 
   return (
-    <View style={[styles.column, { width }]}>
-      <FlatList
-        ref={listRef}
-        data={paddedData}
-        keyExtractor={(_, i) => String(i)}
-        renderItem={renderItem}
-        showsVerticalScrollIndicator={false}
-        snapToInterval={ITEM_HEIGHT}
-        decelerationRate="fast"
-        onMomentumScrollEnd={handleScrollEnd}
-        getItemLayout={(_, index) => ({
-          length: ITEM_HEIGHT,
-          offset: ITEM_HEIGHT * index,
-          index,
-        })}
-        initialScrollIndex={selectedIndex + PADDING}
-        scrollEventThrottle={16}
-        bounces={false}
-        style={{ height: PICKER_HEIGHT }}
-      />
+    <View style={styles.header}>
+      <Pressable
+        onPress={onPrev}
+        disabled={!canGoPrev}
+        style={[styles.navBtn, { opacity: canGoPrev ? 1 : 0.25 }]}
+        hitSlop={10}
+      >
+        <Ionicons name="chevron-back" size={18} color={colors.text} />
+      </Pressable>
+
+      <Pressable onPress={onMonthPress} style={styles.headerCenter}>
+        <Text style={[styles.headerMonth, { color: colors.text }]}>
+          {MONTHS[month]}
+        </Text>
+        <Text style={[styles.headerYear, { color: colors.primary }]}>
+          {year}
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={onNext}
+        disabled={!canGoNext}
+        style={[styles.navBtn, { opacity: canGoNext ? 1 : 0.25 }]}
+        hitSlop={10}
+      >
+        <Ionicons name="chevron-forward" size={18} color={colors.text} />
+      </Pressable>
     </View>
   );
 }
 
-// ─── Main DatePicker ──────────────────────────────────────────────────────────
+// ─── Year Grid Picker (shown when tapping the year) ───────────────────────────
 
-export function DatePicker({ value, onChange, mode = 'any' }: DatePickerProps) {
+interface YearPickerProps {
+  currentYear: number;
+  mode: DatePickerMode;
+  onSelect: (year: number) => void;
+  onClose: () => void;
+}
+
+function YearPicker({ currentYear, mode, onSelect, onClose }: YearPickerProps) {
   const { colors } = useAppTheme();
+  const today = todayMidnight.getFullYear();
 
-  const selectedDay = value.getDate();       // 1-31
-  const selectedMonth = value.getMonth();    // 0-11
-  const selectedYear = value.getFullYear();
+  const startYear = mode === 'future' ? today : today - 100;
+  const endYear = mode === 'past' ? today : today + 20;
 
-  // ── Year range ──────────────────────────────────────────────────────────────
-  const currentYear = today.getFullYear();
-  let yearStart: number;
-  let yearEnd: number;
-
-  if (mode === 'past') {
-    yearStart = currentYear - 100;
-    yearEnd = currentYear;
-  } else if (mode === 'future') {
-    yearStart = currentYear;
-    yearEnd = currentYear + 50;
-  } else {
-    yearStart = currentYear - 100;
-    yearEnd = currentYear + 50;
-  }
-
-  const years = Array.from({ length: yearEnd - yearStart + 1 }, (_, i) => {
-    const y = yearStart + i;
-    return { value: y, label: String(y), disabled: false };
-  });
-
-  const yearIndex = clamp(selectedYear - yearStart, 0, years.length - 1);
-
-  // ── Month data (disable based on mode + year) ───────────────────────────────
-  const months = MONTHS.map((name, i) => {
-    let disabled = false;
-    if (mode === 'past' && selectedYear === currentYear) {
-      disabled = i > today.getMonth();
-    } else if (mode === 'future' && selectedYear === currentYear) {
-      disabled = i < today.getMonth();
-    }
-    return { value: i, label: name, disabled };
-  });
-
-  const safeMonth = months[selectedMonth].disabled
-    ? months.findIndex((m) => !m.disabled)
-    : selectedMonth;
-
-  // ── Day data (disable based on mode + month + year) ─────────────────────────
-  const maxDay = daysInMonth(selectedMonth, selectedYear);
-  const days = Array.from({ length: maxDay }, (_, i) => {
-    const d = i + 1;
-    let disabled = false;
-    const thisDate = new Date(selectedYear, selectedMonth, d);
-    thisDate.setHours(0, 0, 0, 0);
-    if (mode === 'past') disabled = thisDate > today;
-    if (mode === 'future') disabled = thisDate < today;
-    return { value: d, label: String(d).padStart(2, '0'), disabled };
-  });
-
-  const safeDay = days[selectedDay - 1]?.disabled
-    ? days.find((d) => !d.disabled)?.value ?? 1
-    : selectedDay;
-
-  const dayIndex = safeDay - 1;
-
-  // ── Handlers ─────────────────────────────────────────────────────────────────
-  const handleDayChange = (index: number) => {
-    const newDay = days[index].value;
-    onChange(new Date(selectedYear, selectedMonth, newDay));
-  };
-
-  const handleMonthChange = (index: number) => {
-    const newMonth = months[index].value;
-    const maxD = daysInMonth(newMonth, selectedYear);
-    const newDay = clamp(selectedDay, 1, maxD);
-    onChange(new Date(selectedYear, newMonth, newDay));
-  };
-
-  const handleYearChange = (index: number) => {
-    const newYear = years[index].value;
-    const maxD = daysInMonth(selectedMonth, newYear);
-    const newDay = clamp(selectedDay, 1, maxD);
-    onChange(new Date(newYear, selectedMonth, newDay));
-  };
-
-  // ── Layout ───────────────────────────────────────────────────────────────────
-  const DAY_W = 52;
-  const MONTH_W = 130;
-  const YEAR_W = 72;
+  const years: number[] = [];
+  for (let y = endYear; y >= startYear; y--) years.push(y);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.card, borderRadius: 20 }]}>
-      {/* Selection highlight band */}
-      <View
-        pointerEvents="none"
-        style={[
-          styles.selectionBand,
-          {
-            top: PICKER_HEIGHT / 2 - ITEM_HEIGHT / 2,
-            height: ITEM_HEIGHT,
-            borderColor: colors.primary + '30',
-            backgroundColor: colors.primary + '0C',
-          },
-        ]}
-      />
-      {/* Top fade */}
-      <View
-        pointerEvents="none"
-        style={[styles.fadeTop, { backgroundColor: colors.card }]}
-      />
-      {/* Bottom fade */}
-      <View
-        pointerEvents="none"
-        style={[styles.fadeBottom, { backgroundColor: colors.card }]}
-      />
+    <View style={styles.yearPickerWrapper}>
+      <View style={[styles.yearPickerHeader, { borderBottomColor: colors.tabIconDefault + '22' }]}>
+        <Text style={[styles.yearPickerTitle, { color: colors.text }]}>Select Year</Text>
+        <Pressable onPress={onClose} hitSlop={10}>
+          <Ionicons name="close" size={20} color={colors.tabIconDefault} />
+        </Pressable>
+      </View>
 
-      <View style={styles.columns}>
-        <Column
-          data={days}
-          selectedIndex={dayIndex}
-          onSelect={handleDayChange}
-          width={DAY_W}
-        />
-        <Column
-          data={months}
-          selectedIndex={safeMonth}
-          onSelect={handleMonthChange}
-          width={MONTH_W}
-        />
-        <Column
-          data={years}
-          selectedIndex={yearIndex}
-          onSelect={handleYearChange}
-          width={YEAR_W}
-        />
+      <View style={styles.yearGrid}>
+        {years.map((y) => {
+          const isSelected = y === currentYear;
+          return (
+            <Pressable
+              key={y}
+              onPress={() => onSelect(y)}
+              style={[
+                styles.yearCell,
+                {
+                  backgroundColor: isSelected ? colors.primary : colors.card,
+                  borderColor: isSelected ? colors.primary : 'transparent',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.yearCellText,
+                  { color: isSelected ? '#fff' : colors.text },
+                ]}
+              >
+                {y}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Main Calendar Picker ──────────────────────────────────────────────────────
+
+export function DatePicker({ value, onChange, mode = 'any' }: DatePickerProps) {
+  const { colors } = useAppTheme();
+
+  const [viewYear, setViewYear] = useState(value.getFullYear());
+  const [viewMonth, setViewMonth] = useState(value.getMonth());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  const animateTransition = (callback: () => void) => {
+    Animated.sequence([
+      Animated.timing(fadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+    ]).start();
+    callback();
+  };
+
+  const goToPrev = () => {
+    animateTransition(() => {
+      if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+      else setViewMonth(m => m - 1);
+    });
+  };
+
+  const goToNext = () => {
+    animateTransition(() => {
+      if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+      else setViewMonth(m => m + 1);
+    });
+  };
+
+  const handleYearSelect = (year: number) => {
+    setViewYear(year);
+    setShowYearPicker(false);
+  };
+
+  const handleDayPress = (day: number) => {
+    const selected = new Date(viewYear, viewMonth, day);
+    selected.setHours(0, 0, 0, 0);
+    onChange(selected);
+  };
+
+  const isDayDisabled = (day: number): boolean => {
+    const d = new Date(viewYear, viewMonth, day);
+    d.setHours(0, 0, 0, 0);
+    if (mode === 'past') return d > todayMidnight;
+    if (mode === 'future') return d < todayMidnight;
+    return false;
+  };
+
+  const isDaySelected = (day: number): boolean => {
+    return (
+      value.getFullYear() === viewYear &&
+      value.getMonth() === viewMonth &&
+      value.getDate() === day
+    );
+  };
+
+  const isToday = (day: number): boolean => {
+    return (
+      todayMidnight.getFullYear() === viewYear &&
+      todayMidnight.getMonth() === viewMonth &&
+      todayMidnight.getDate() === day
+    );
+  };
+
+  const totalDays = daysInMonth(viewMonth, viewYear);
+  const startDay = startDayOfMonth(viewMonth, viewYear);
+
+  // Build grid: nulls for empty leading cells, then day numbers
+  const cells: (number | null)[] = [
+    ...Array(startDay).fill(null),
+    ...Array.from({ length: totalDays }, (_, i) => i + 1),
+  ];
+  // Pad to complete last row
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.card }]}>
+      {showYearPicker ? (
+        <YearPicker
+          currentYear={viewYear}
+          mode={mode}
+          onSelect={handleYearSelect}
+          onClose={() => setShowYearPicker(false)}
+        />
+      ) : (
+        <>
+          <CalendarHeader
+            year={viewYear}
+            month={viewMonth}
+            mode={mode}
+            onPrev={goToPrev}
+            onNext={goToNext}
+            onMonthPress={() => setShowYearPicker(true)}
+          />
+
+          {/* Day-of-week labels */}
+          <View style={styles.weekRow}>
+            {DAYS.map((d) => (
+              <View key={d} style={styles.weekCell}>
+                <Text style={[styles.weekLabel, { color: colors.tabIconDefault }]}>{d}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Divider */}
+          <View style={[styles.divider, { backgroundColor: colors.tabIconDefault + '18' }]} />
+
+          {/* Calendar grid */}
+          <Animated.View style={[styles.grid, { opacity: fadeAnim }]}>
+            {cells.map((day, i) => {
+              if (day === null) {
+                return <View key={`empty-${i}`} style={styles.dayCell} />;
+              }
+
+              const disabled = isDayDisabled(day);
+              const selected = isDaySelected(day);
+              const today = isToday(day);
+
+              return (
+                <Pressable
+                  key={`day-${day}`}
+                  onPress={() => !disabled && handleDayPress(day)}
+                  style={styles.dayCell}
+                >
+                  <View
+                    style={[
+                      styles.dayInner,
+                      selected && { backgroundColor: colors.primary },
+                      !selected && today && {
+                        borderWidth: 1.5,
+                        borderColor: colors.primary,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dayText,
+                        {
+                          color: selected
+                            ? '#fff'
+                            : disabled
+                              ? colors.tabIconDefault + '35'
+                              : today
+                                ? colors.primary
+                                : colors.text,
+                          fontWeight: selected || today ? '700' : '400',
+                        },
+                      ]}
+                    >
+                      {day}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </Animated.View>
+
+          {/* Selected date label */}
+          <View style={[styles.footer, { borderTopColor: colors.tabIconDefault + '18' }]}>
+            <Text style={[styles.selectedLabel, { color: colors.tabIconDefault }]}>
+              {value.toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+              })}
+            </Text>
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
+// ─── Styles ────────────────────────────────────────────────────────────────────
+
+const CELL_SIZE = Math.floor((Dimensions.get('window').width - 40 - 32) / 7);
 
 const styles = StyleSheet.create({
   container: {
+    borderRadius: 20,
     overflow: 'hidden',
+    paddingBottom: 4,
   },
-  columns: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    gap: 4,
+    paddingTop: 18,
+    paddingBottom: 14,
   },
-  column: {
-    overflow: 'hidden',
+  headerCenter: {
+    alignItems: 'center',
+    gap: 2,
   },
-  item: {
+  headerMonth: {
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  headerYear: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  navBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 6,
+  },
+  weekCell: {
+    width: CELL_SIZE,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  divider: {
+    height: 1,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 0,
+  },
+  dayCell: {
+    width: CELL_SIZE,
+    height: CELL_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayInner: {
+    width: CELL_SIZE - 6,
+    height: CELL_SIZE - 6,
+    borderRadius: (CELL_SIZE - 6) / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayText: {
+    fontSize: 14,
+    letterSpacing: 0.1,
+  },
+  footer: {
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 12,
+    paddingBottom: 14,
     alignItems: 'center',
   },
-  itemText: {
+  selectedLabel: {
+    fontSize: 13,
     letterSpacing: 0.2,
+    fontWeight: '500',
   },
-  selectionBand: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    borderTopWidth: 1,
+  // Year picker
+  yearPickerWrapper: {
+    padding: 16,
+  },
+  yearPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 14,
+    marginBottom: 12,
     borderBottomWidth: 1,
+  },
+  yearPickerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  yearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  yearCell: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 10,
-    zIndex: 1,
+    borderWidth: 1.5,
   },
-  fadeTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: ITEM_HEIGHT * 2,
-    opacity: 0.75,
-    zIndex: 2,
-  },
-  fadeBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: ITEM_HEIGHT * 2,
-    opacity: 0.75,
-    zIndex: 2,
+  yearCellText: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
 });
