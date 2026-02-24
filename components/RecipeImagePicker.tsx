@@ -10,6 +10,12 @@ interface RecipeImagePickerProps {
   onChange: (uri: string | null) => void;
 }
 
+// Normalizes Firebase Storage URLs so they load correctly on all platforms
+function normalizeFirebaseUrl(uri: string | null): string | null {
+  if (!uri) return null;
+  return uri.replace('firebasestorage.app', 'googleapis.com');
+}
+
 export function RecipeImagePicker({ imageUri, onChange }: RecipeImagePickerProps) {
   const { colors } = useAppTheme();
 
@@ -23,15 +29,13 @@ export function RecipeImagePicker({ imageUri, onChange }: RecipeImagePickerProps
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [16, 9],
         quality: 0.85,
       });
 
-      // Based exactly on your log, we just check if it wasn't canceled and has assets
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        // Boom, pass the URI up to the parent!
         onChange(result.assets[0].uri);
       }
     } catch (error) {
@@ -41,20 +45,18 @@ export function RecipeImagePicker({ imageUri, onChange }: RecipeImagePickerProps
 
   const clear = () => onChange(null);
 
-  const normalizedUri = imageUri?.replace(
-    'firebasestorage.app',
-    'googleapis.com'
-  );
+  // ✅ FIX: normalizedUri is now actually used when rendering the image
+  const normalizedUri = normalizeFirebaseUrl(imageUri);
 
-  // If we have an image URL (either from Firebase or just picked locally)
   if (imageUri) {
     return (
       <View style={[styles.imageWrapper, { backgroundColor: colors.card }]}>
         <Image
-          source={imageUri}
+          source={normalizedUri}  // ✅ was: source={imageUri} — never used the normalized URL!
           style={styles.image}
           contentFit="cover"
           transition={150}
+          cachePolicy="memory-disk"
         />
 
         {/* Edit / remove overlay */}
@@ -71,7 +73,6 @@ export function RecipeImagePicker({ imageUri, onChange }: RecipeImagePickerProps
     );
   }
 
-  // If no image is selected yet, show the placeholder
   return (
     <Pressable
       onPress={pick}
@@ -107,22 +108,17 @@ const styles = StyleSheet.create({
   },
   placeholderTitle: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
   placeholderSub: { fontSize: 13, letterSpacing: 0.1 },
-
   imageWrapper: {
     height: 190,
     width: '100%',
     borderRadius: 18,
     overflow: 'hidden',
     position: 'relative',
-    // We pass backgroundColor dynamically in the component above so you can see if the box renders!
   },
-
   image: {
     width: '100%',
     height: '100%',
-    // REMOVED flex: 1, as it causes Android/iOS rendering conflicts inside absolute wrappers
   },
-
   overlay: {
     position: 'absolute',
     bottom: 12,

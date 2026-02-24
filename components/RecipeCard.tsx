@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../constants/Config';
 import { Recipe } from '../types/GlobalTypes';
+import { Image } from 'expo-image';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -24,6 +25,12 @@ interface RecipeCardProps {
   style?: ViewStyle;
 }
 
+// ✅ FIX: Normalize Firebase Storage URLs so they load correctly on all platforms
+function normalizeFirebaseUrl(uri: string | null | undefined): string | null {
+  if (!uri) return null;
+  return uri.replace('firebasestorage.app', 'googleapis.com');
+}
+
 export function RecipeCard({
   recipe,
   onPressCard,
@@ -38,6 +45,9 @@ export function RecipeCard({
 }: RecipeCardProps) {
   const { colors } = useAppTheme();
 
+  // ✅ FIX: Normalize the URL once here so the Image always gets a working URL
+  const imageUrl = normalizeFirebaseUrl(recipe.imageUrl);
+
   return (
     <Pressable
       onPress={onPressCard}
@@ -50,8 +60,14 @@ export function RecipeCard({
     >
       {/* 1. Image Section */}
       <View style={styles.imageContainer}>
-        {recipe.imageUrl ? (
-          <Image source={{ uri: recipe.imageUrl }} style={styles.image} resizeMode="cover" />
+        {imageUrl ? (
+          <Image
+            source={{ uri: imageUrl }}  // ✅ was: recipe.imageUrl — raw Firebase URL that may fail
+            style={styles.image}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
         ) : (
           <View style={[styles.placeholderImage, { backgroundColor: colors.background }]}>
             <Ionicons name="restaurant-outline" size={32} color={colors.tabIconDefault} />

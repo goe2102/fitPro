@@ -22,6 +22,7 @@ import { IngredientEditor, Ingredient } from '../../components/IngredientEditor'
 import { InstructionEditor, Instruction } from '../../components/InstructionEditor';
 import { saveRecipe } from '../../methods/recipes/saveRecipe';
 import { Recipe } from '../../types/GlobalTypes';
+import calculateTotalRecipeCalories from '../../methods/recipes/calculateTotalCalories';
 
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -147,52 +148,79 @@ export default function AddRecipeScreen() {
   const handleSubmit = async () => {
     setLoading(true);
 
-    // 1. Build the base object with ONLY the required fields
+    // --- START NUTRITION CALCULATION LOGIC ---
+
+    // 1. Clean ingredients first so we can calculate with them
+    const cleanIngredients = ingredients.map(ing => {
+      const clean: any = {
+        name: ing.name,
+        unit: ing.unit,
+        amount: Number(ing.amount),
+      };
+      if (ing.calories) clean.calories = Number(ing.calories);
+      if (ing.protein) clean.protein = Number(ing.protein);
+      if (ing.carbs) clean.carbs = Number(ing.carbs);
+      if (ing.fat) clean.fat = Number(ing.fat);
+      return clean;
+    });
+
+    // 2. Run the calculation function we built earlier
+    const numPortions = Number(portions) || 1;
+    const calculated = calculateTotalRecipeCalories(cleanIngredients, numPortions);
+
+    // --- END NUTRITION CALCULATION LOGIC ---
+
+    // 1. Build the base object (Keeping your structure)
     const recipe: any = {
       title: title.trim(),
       isPublic,
       isVegan,
       difficulty: difficulty!,
-      portions: Number(portions),
+      portions: numPortions,
       prepTime: Number(prepTime),
       cookTime: Number(cookTime),
       instructions: instructions.map(i => i.text).filter(Boolean),
+      ingredients: cleanIngredients, // Using the cleaned list from above
     };
 
-    // 2. Safely add overall recipe macros ONLY if the user typed them
+    // 2. Priority Logic: Manual Input OR Calculated
+    // If user provided overall 'calories', divide that by portions. Otherwise use calculated sum.
+    recipe.totalCaloriesPerPortion = calories
+      ? Math.round(Number(calories) / numPortions)
+      : calculated.caloriesPerPortion;
+
+    recipe.totalProteinPerPortion = protein
+      ? Number((Number(protein) / numPortions).toFixed(1))
+      : calculated.proteinPerPortion;
+
+    recipe.totalCarbsPerPortion = carbs
+      ? Number((Number(carbs) / numPortions).toFixed(1))
+      : calculated.carbsPerPortion;
+
+    recipe.totalFatPerPortion = fat
+      ? Number((Number(fat) / numPortions).toFixed(1))
+      : calculated.fatsPerPortion;
+
+    // Set the completeness flag
+    // If user provided manual overall data, we consider it "complete"
+    recipe.hasCompleteNutrionalDetails = !!calories || calculated.hasCompleteNutData;
+
+    // 3. Keep your manual field storage for editing later
     if (calories) recipe.calories = Number(calories);
     if (protein) recipe.protein = Number(protein);
     if (carbs) recipe.carbs = Number(carbs);
     if (fat) recipe.fat = Number(fat);
 
-    // 3. Map ingredients and safely omit empty macro fields
-    recipe.ingredients = ingredients.map(ing => {
-      // Required ingredient fields
-      const cleanIng: any = {
-        name: ing.name,
-        unit: ing.unit,
-        amount: Number(ing.amount),
-      };
-
-      // Optional ingredient macros
-      if (ing.calories) cleanIng.calories = Number(ing.calories);
-      if (ing.protein) cleanIng.protein = Number(ing.protein);
-      if (ing.carbs) cleanIng.carbs = Number(ing.carbs);
-      if (ing.fat) cleanIng.fat = Number(ing.fat);
-
-      return cleanIng;
-    });
+    if (imageUri) recipe.imageUrl = imageUri;
 
     try {
-      // 4. Send the clean object to Firebase!
+      // 4. Send to Firebase
       await saveRecipe(recipe as Recipe, imageUri, existingRecipe?.id);
-
       Alert.alert("Success!", `Recipe ${isEditMode ? 'updated' : 'created'} successfully.`);
       router.back();
-
     } catch (error: any) {
       console.error("Error saving recipe:", error);
-      Alert.alert("Error", error.message || "Failed to save the recipe. Please try again.");
+      Alert.alert("Error", error.message || "Failed to save.");
     } finally {
       setLoading(false);
     }

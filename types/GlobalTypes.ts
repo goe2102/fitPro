@@ -21,6 +21,12 @@ export interface Recipe {
   isPublic: boolean;
   createdAt: number;
 
+  totalCaloriesPerPortion?: number;
+  totalCarbsPerPortion?: number;
+  totalFatPerPortion?: number;
+  totalProteinPerPortion?: number;
+  hasCompleteNutrionalDetails?: boolean;
+
   ingredients: Ingredient[];
   difficulty: DifficultyLevel;
   prepTimeMinutes?: number;
