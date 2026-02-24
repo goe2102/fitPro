@@ -4,16 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../constants/Config';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
+import { useFirebaseImageUrl } from '../methods/recipes/useFirebaseImageUrl';
+
 
 interface RecipeImagePickerProps {
   imageUri: string | null;
   onChange: (uri: string | null) => void;
-}
-
-// Normalizes Firebase Storage URLs so they load correctly on all platforms
-function normalizeFirebaseUrl(uri: string | null): string | null {
-  if (!uri) return null;
-  return uri.replace('firebasestorage.app', 'googleapis.com');
 }
 
 export function RecipeImagePicker({ imageUri, onChange }: RecipeImagePickerProps) {
@@ -45,14 +41,17 @@ export function RecipeImagePicker({ imageUri, onChange }: RecipeImagePickerProps
 
   const clear = () => onChange(null);
 
-  // ✅ FIX: normalizedUri is now actually used when rendering the image
-  const normalizedUri = normalizeFirebaseUrl(imageUri);
+  // For local file:// URIs (freshly picked), use directly.
+  // For remote Firebase URLs, use the hook to get a fresh token.
+  const isLocalFile = !!imageUri && !imageUri.startsWith('http');
+  const freshRemoteUrl = useFirebaseImageUrl(isLocalFile ? null : imageUri);
+  const displayUri = isLocalFile ? imageUri : freshRemoteUrl;
 
   if (imageUri) {
     return (
       <View style={[styles.imageWrapper, { backgroundColor: colors.card }]}>
         <Image
-          source={normalizedUri}  // ✅ was: source={imageUri} — never used the normalized URL!
+          source={displayUri ? { uri: displayUri } : undefined}
           style={styles.image}
           contentFit="cover"
           transition={150}

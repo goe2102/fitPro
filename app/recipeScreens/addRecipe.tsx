@@ -86,6 +86,8 @@ export default function AddRecipeScreen() {
     ? JSON.parse(decodeURIComponent(existingRecipeData as string))
     : null;
 
+  console.log('[AddRecipe] existingRecipe.imageUrl:', existingRecipe?.imageUrl);
+
   const isEditMode = !!existingRecipe;
 
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
@@ -132,6 +134,8 @@ export default function AddRecipeScreen() {
       fat: ing.fat !== undefined ? String(ing.fat) : undefined,
     })) ?? []
   );
+
+  
   const [instructions, setInstructions] = useState<Instruction[]>(
     existingRecipe?.instructions?.map((text, i) => ({ id: String(i), text })) ?? []
   );

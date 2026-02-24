@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../constants/Config';
 import { Recipe } from '../types/GlobalTypes';
 import { Image } from 'expo-image';
+import { useFirebaseImageUrl } from '../methods/recipes/useFirebaseImageUrl';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -25,12 +26,6 @@ interface RecipeCardProps {
   style?: ViewStyle;
 }
 
-// ✅ FIX: Normalize Firebase Storage URLs so they load correctly on all platforms
-function normalizeFirebaseUrl(uri: string | null | undefined): string | null {
-  if (!uri) return null;
-  return uri.replace('firebasestorage.app', 'googleapis.com');
-}
-
 export function RecipeCard({
   recipe,
   onPressCard,
@@ -44,9 +39,7 @@ export function RecipeCard({
   style,
 }: RecipeCardProps) {
   const { colors } = useAppTheme();
-
-  // ✅ FIX: Normalize the URL once here so the Image always gets a working URL
-  const imageUrl = normalizeFirebaseUrl(recipe.imageUrl);
+  const imageUrl = useFirebaseImageUrl(recipe.imageUrl);
 
   return (
     <Pressable
