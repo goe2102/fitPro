@@ -105,7 +105,10 @@ export default function MyRecipes() {
         renderItem={({ item }) => (
           <RecipeCard
             recipe={item}
-            onPressCard={() => openRecipeDetails(item.id)}
+            onPressCard={() => router.push({
+                            pathname: '/recipeScreens/viewRecipe',
+                            params: { recipeData: encodeURIComponent(JSON.stringify(item)) }
+                          })}
             icon1Name="pencil-outline"
             icon1Color={colors.primary}
             onPressIcon1={() => handleEdit(item)}

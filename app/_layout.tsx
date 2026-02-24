@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ActivityIndicator, View } from 'react-native';
 import { useAppTheme } from '../constants/Config';
+import { CookTimerProvider } from '../context/CookTimerContext';
 
 // This component handles the actual routing logic
 function RootNavigation() {
@@ -64,7 +65,10 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
+        <CookTimerProvider>
         <RootNavigation />
+          </CookTimerProvider>
+
       </AuthProvider>
     </SafeAreaProvider>
   );

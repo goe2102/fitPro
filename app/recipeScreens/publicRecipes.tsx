@@ -28,6 +28,7 @@ import { auth, db } from '../../constants/FirebaseConfig';
 import { Recipe } from '../../types/GlobalTypes';
 import { applyRecipeFilters, DEFAULT_FILTERS, RecipeFilters, RecipeListControls } from '../../components/RecipeListControl';
 import { useScrollToTop } from '@react-navigation/native';
+import { router } from 'expo-router';
 
 export default function PublicRecipes() {
   const { colors, spacing } = useAppTheme();
@@ -217,7 +218,10 @@ export default function PublicRecipes() {
           return (
             <RecipeCard
               recipe={item}
-              onPressCard={() => console.log('Open recipe:', item.id)}
+              onPressCard={() => router.push({
+                pathname: '/recipeScreens/viewRecipe',
+                params: { recipeData: encodeURIComponent(JSON.stringify(item)) }
+              })}
               showLikes
               icon1Name={isLiked ? 'heart' : 'heart-outline'}
               icon1Color={isLiked ? colors.primary : colors.tabIconDefault}
