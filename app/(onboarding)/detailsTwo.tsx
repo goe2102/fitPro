@@ -79,7 +79,7 @@ const DetailsTwoScreen = () => {
           >
             <Ionicons name="arrow-back" size={18} color={colors.text} />
           </Pressable>
-          <Text style={[styles.eyebrow, { color: colors.primary }]}>Step 2</Text>
+          <Text style={[styles.eyebrow, { color: colors.primary }]}>Step 3</Text>
           <Text style={[styles.title, { color: colors.text }]}>Personal Info</Text>
           <Text style={[styles.subtitle, { color: colors.tabIconDefault }]}>
             We need this to calculate values

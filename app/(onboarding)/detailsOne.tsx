@@ -34,7 +34,7 @@ const DetailsOneScreen = () => {
         { birthday: birthday.toISOString(), email: user.email },
         { merge: true },
       );
-      router.push('/detailsTwo');
+      router.push('/details1Two');
     } catch (error) {
       console.error('Error putting Birthday to Firestore: ', error);
     } finally {

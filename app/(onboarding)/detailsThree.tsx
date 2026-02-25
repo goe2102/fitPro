@@ -59,8 +59,9 @@ const DetailsThreeScreen = () => {
         aimedWeight: submitAim,
         aimedDate: aimedDate.toISOString(),
         goal: goal,
-        isOnboarded: true,
       }, {merge: true});
+
+      router.push('/detailsFour')
       
     } catch (error) {
       console.error("Error putting goals to FireStrore: ", error);
@@ -95,7 +96,7 @@ return (
           >
             <Ionicons name="arrow-back" size={18} color={colors.text} />
           </Pressable>
-          <Text style={[styles.eyebrow, { color: colors.primary }]}>Step 3</Text>
+          <Text style={[styles.eyebrow, { color: colors.primary }]}>Step 4</Text>
           <Text style={[styles.title, { color: colors.text }]}>Your Goals</Text>
           <Text style={[styles.subtitle, { color: colors.tabIconDefault }]}>
             Select what you want to achieve

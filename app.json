@@ -27,7 +27,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
-    ]
+      "expo-router",
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "Allow FitPro to read your health data",
+          "healthUpdatePermission": "Allow FitPro to update your health data"
+        }
+      ]]
   }
 }
