@@ -15,125 +15,117 @@ export interface FoodSearchResult {
   nutriscore?: string;
 }
 
-const OFF_BASE = 'https://world.openfoodfacts.org';
 const USER_AGENT = 'FitPro/1.0 (fitpro@example.com)';
 
 // ─── Nutriment extractor ──────────────────────────────────────────────────────
-// OFF stores values per 100g with keys like "energy-kcal_100g", "proteins_100g"
-// It sometimes uses "energy_100g" in kJ instead — we handle both.
-function extractNutriments(n: any): Pick<FoodSearchResult, 'calories' | 'protein' | 'carbs' | 'fat' | 'fiber' | 'sugar'> {
-  if (!n) return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+function round1(v: any) { return Math.round(Number(v ?? 0) * 10) / 10; }
 
-  // Calories: prefer kcal field, fall back to kJ ÷ 4.184
+function extractNutriments(n: any) {
+  if (!n || typeof n !== 'object') return null;
+
   let calories = Number(n['energy-kcal_100g'] ?? n['energy-kcal'] ?? 0);
   if (!calories) {
     const kj = Number(n['energy_100g'] ?? n['energy'] ?? 0);
-    calories = kj > 0 ? Math.round(kj / 4.184) : 0;
+    if (kj > 0) calories = kj / 4.184;
   }
+
+  const protein = round1(n['proteins_100g'] ?? n['proteins'] ?? 0);
+  const carbs = round1(n['carbohydrates_100g'] ?? n['carbohydrates'] ?? 0);
+  const fat = round1(n['fat_100g'] ?? n['fat'] ?? 0);
+
+  // Require at least calories OR two macros to be non-zero
+  if (Math.round(calories) === 0 && protein === 0 && carbs === 0 && fat === 0) return null;
 
   return {
     calories: Math.round(calories),
-    protein: Math.round((Number(n['proteins_100g'] ?? n['proteins'] ?? 0)) * 10) / 10,
-    carbs: Math.round((Number(n['carbohydrates_100g'] ?? n['carbohydrates'] ?? 0)) * 10) / 10,
-    fat: Math.round((Number(n['fat_100g'] ?? n['fat'] ?? 0)) * 10) / 10,
-    fiber: Math.round((Number(n['fiber_100g'] ?? n['fiber'] ?? 0)) * 10) / 10,
-    sugar: Math.round((Number(n['sugars_100g'] ?? n['sugars'] ?? 0)) * 10) / 10,
+    protein,
+    carbs,
+    fat,
+    fiber: round1(n['fiber_100g'] ?? n['fiber'] ?? n['fibers_100g'] ?? 0),
+    sugar: round1(n['sugars_100g'] ?? n['sugars'] ?? 0),
   };
 }
 
+// ─── Map raw OFF product → FoodSearchResult ───────────────────────────────────
 function mapProduct(p: any): FoodSearchResult | null {
-  if (!p) return null;
+  if (!p || typeof p !== 'object') return null;
 
-  // Prefer German name, fall back through multiple fields
   const name = (
     p.product_name_de ||
     p.product_name ||
     p.generic_name_de ||
     p.generic_name ||
-    p.abbreviated_product_name ||
     ''
   ).trim();
-
   if (!name) return null;
 
-  // nutriments can be nested differently — try multiple paths
-  const nutriments = p.nutriments ?? p.nutrient_levels ?? {};
-  const macros = extractNutriments(nutriments);
-
-  // Only filter out if we have truly zero data across ALL macros
-  const hasAnyData = macros.calories > 0 || macros.protein > 0 ||
-    macros.carbs > 0 || macros.fat > 0;
-  if (!hasAnyData) return null;
+  const macros = extractNutriments(p.nutriments);
+  if (!macros) return null;  // no usable nutrient data
 
   return {
-    barcode: (p.code ?? p._id ?? p.id ?? '').toString(),
+    barcode: String(p.code ?? p._id ?? p.id ?? ''),
     name,
-    brand: p.brands?.split(',')[0]?.trim() || undefined,
-    imageUrl: p.image_front_small_url ?? p.image_small_url ?? p.image_url,
-    nutriscore: p.nutrition_grades ?? p.nutriscore_grade ?? p.nutriscore ?? undefined,
+    brand: Array.isArray(p.brands)
+      ? p.brands[0]
+      : p.brands?.split(',')[0]?.trim() || undefined,
+    imageUrl: p.image_front_small_url ?? p.image_small_url ?? p.image_url ?? undefined,
+    nutriscore: p.nutrition_grades !== 'unknown' ? (p.nutrition_grades ?? p.nutriscore_grade) : undefined,
     ...macros,
   };
 }
 
-// ─── Text search ──────────────────────────────────────────────────────────────
+// ─── Search-a-licious only (v1 cgi/search times out — do not use) ─────────────
+// Debug confirmed: Search-a-licious responds in ~130ms, v1 times out at 60s.
 export async function searchFoodByName(query: string): Promise<FoodSearchResult[]> {
-  if (!query.trim()) return [];
+  if (query.trim().length < 2) return [];
 
-  const params = new URLSearchParams({
-    search_terms: query.trim(),
-    search_simple: '1',
-    action: 'process',
-    json: '1',
-    lc: 'de',
-    cc: 'de',
-    page_size: '24',
-    sort_by: 'unique_scans_n',  // Sort by popularity — more relevant results
-    fields: [
-      'code', '_id',
-      'product_name', 'product_name_de',
-      'generic_name', 'generic_name_de',
-      'abbreviated_product_name',
-      'brands',
-      'nutriments',
-      'nutrition_grades', 'nutriscore_grade',
-      'image_front_small_url', 'image_small_url',
-    ].join(','),
-  });
+  // Search-a-licious does NOT support the `fields` filter properly for nutriments —
+  // debug showed products[0] had no nutriments when fields param was passed.
+  // Fetch without fields restriction so all data comes through, then map client-side.
+  const url =
+    `https://search.openfoodfacts.org/search` +
+    `?q=${encodeURIComponent(query.trim())}` +
+    `&page_size=24` +
+    `&sort_by=unique_scans_n`;
 
-  const res = await fetch(`${OFF_BASE}/cgi/search.pl?${params}`, {
+  const res = await fetch(url, {
     headers: { 'User-Agent': USER_AGENT },
+    signal: AbortSignal.timeout(8000),
   });
 
-  if (!res.ok) throw new Error(`OpenFoodFacts Fehler: ${res.status}`);
+  if (!res.ok) throw new Error(`Search error: ${res.status}`);
   const data = await res.json();
 
-  return (data.products ?? [])
+  // Search-a-licious returns { hits: [...products] }
+  const hits: any[] = data.hits ?? [];
+
+  const results = hits
     .map(mapProduct)
-    .filter((p: FoodSearchResult | null): p is FoodSearchResult => p !== null);
+    .filter((p): p is FoodSearchResult => p !== null);
+
+  return results;
 }
 
 // ─── Barcode lookup ───────────────────────────────────────────────────────────
+// Uses v2 product endpoint — confirmed working in debug (470ms, full nutriments)
 export async function lookupBarcode(barcode: string): Promise<FoodSearchResult | null> {
-  const fields = [
-    'code', 'product_name', 'product_name_de',
-    'generic_name', 'generic_name_de',
-    'brands', 'nutriments', 'nutrition_grades',
-    'image_front_small_url',
-  ].join(',');
-
   const res = await fetch(
-    `${OFF_BASE}/api/v2/product/${barcode}.json?fields=${fields}&lc=de`,
-    { headers: { 'User-Agent': USER_AGENT } }
+    `https://world.openfoodfacts.org/api/v2/product/${barcode}.json?lc=de`,
+    {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(8000),
+    }
   );
 
-  if (!res.ok) throw new Error(`OpenFoodFacts Fehler: ${res.status}`);
+  if (!res.ok) throw new Error(`Barcode error: ${res.status}`);
   const data = await res.json();
 
+  // v2 returns { status: 1, product: {...} }  — NOT products array
   if (data.status !== 1 || !data.product) return null;
   return mapProduct({ ...data.product, code: barcode });
 }
 
-// ─── Search hook with debounce ────────────────────────────────────────────────
+// ─── React hook ───────────────────────────────────────────────────────────────
 interface UseFoodSearchResult {
   results: FoodSearchResult[];
   loading: boolean;
@@ -148,10 +140,11 @@ export function useFoodSearch(query: string, debounceMs = 350): UseFoodSearchRes
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    // Require at least 2 chars to avoid hammering API on every keystroke
+
     if (query.trim().length < 2) {
       setResults([]);
       setLoading(false);
+      setError(null);
       return;
     }
 
@@ -162,8 +155,9 @@ export function useFoodSearch(query: string, debounceMs = 350): UseFoodSearchRes
       try {
         const foods = await searchFoodByName(query);
         setResults(foods);
+        if (foods.length === 0) setError(`Nichts gefunden für "${query}"`);
       } catch (err: any) {
-        setError(err.message ?? 'Suche fehlgeschlagen');
+        setError('Suche fehlgeschlagen. Internetverbindung prüfen.');
         setResults([]);
       } finally {
         setLoading(false);

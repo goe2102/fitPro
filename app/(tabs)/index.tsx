@@ -6,6 +6,8 @@ import { DailyCalorieCard } from '../../components/DailyCalorieCard';
 import { MealCard } from '../../components/MealCard';
 import { DatePickerModal } from '../../components/DatePickerModal';
 import { useDailyNutrition, getTodayString, dateToString } from '../../hooks/useDailyNutrition';
+import { CustomButton } from '../../components/CustomButton';
+import { router } from 'expo-router';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 
@@ -93,6 +95,9 @@ export default function HomeScreen() {
             
           />
         ))}
+
+        <CustomButton onPress={() => router.push('../ApiDebug')} title='hi'/>
+
       </ScrollView>
     </View>
   );
