@@ -90,6 +90,7 @@ export default function HomeScreen() {
             mealType={mt}
             summary={meals[mt]}
             dateString={selectedDate}
+            
           />
         ))}
       </ScrollView>
