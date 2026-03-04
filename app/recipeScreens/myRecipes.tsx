@@ -1,78 +1,60 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, ActivityIndicator, Alert, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { collection, query, where, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { Ionicons } from '@expo/vector-icons';
 import { RecipeCard } from '../../components/RecipeCard';
-import { applyRecipeFilters, DEFAULT_FILTERS, RecipeFilters, RecipeListControls } from '../../components/RecipeListControl';
+import { applyRecipeFilters, RecipeFilters, DEFAULT_FILTERS } from '../../components/RecipeListControl';
 import { useAppTheme } from '../../constants/Config';
 import { auth, db } from '../../constants/FirebaseConfig';
 import { Recipe } from '../../types/GlobalTypes';
 import { useScrollToTop } from '@react-navigation/native';
 
-export default function MyRecipes() {
+interface Props {
+  filters?: RecipeFilters;
+}
+
+export default function MyRecipes({ filters = DEFAULT_FILTERS }: Props) {
   const { colors, spacing } = useAppTheme();
   const router = useRouter();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<RecipeFilters>(DEFAULT_FILTERS);
-
   const listRef = useRef<FlatList>(null);
   useScrollToTop(listRef);
 
   useEffect(() => {
     if (!auth.currentUser) return;
-
     const q = query(
       collection(db, 'recipes'),
       where('authorId', '==', auth.currentUser.uid)
     );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedRecipes: Recipe[] = [];
-      snapshot.forEach((docSnap) => {
-        fetchedRecipes.push({ id: docSnap.id, ...docSnap.data() } as Recipe);
-      });
-      setRecipes(fetchedRecipes);
+    const unsub = onSnapshot(q, (snap) => {
+      const fetched: Recipe[] = [];
+      snap.forEach((d) => fetched.push({ id: d.id, ...d.data() } as Recipe));
+      setRecipes(fetched);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching my recipes: ", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    }, (err) => { console.error(err); setLoading(false); });
+    return () => unsub();
   }, []);
 
   const handleEdit = (recipe: Recipe) => {
-    console.log('imageUri prop:', recipe.imageUrl);
     router.push({
       pathname: '/recipeScreens/addRecipe',
-      params: { existingRecipeData: encodeURIComponent(JSON.stringify(recipe)) }
+      params: { existingRecipeData: encodeURIComponent(JSON.stringify(recipe)) },
     });
   };
 
   const handleDelete = (recipeId: string) => {
-    Alert.alert(
-      "Delete Recipe",
-      "Are you sure you want to permanently delete this recipe?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'recipes', recipeId));
-            } catch (error) {
-              Alert.alert("Error", "Could not delete recipe.");
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const openRecipeDetails = (recipeId: string) => {
-    console.log("Opening recipe full view: ", recipeId);
+    Alert.alert('Delete Recipe', 'Are you sure you want to permanently delete this recipe?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          try { await deleteDoc(doc(db, 'recipes', recipeId)); }
+          catch { Alert.alert('Error', 'Could not delete recipe.'); }
+        },
+      },
+    ]);
   };
 
   const displayed = applyRecipeFilters(recipes, filters);
@@ -86,44 +68,55 @@ export default function MyRecipes() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        ref={listRef}
-        data={displayed}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={{ paddingBottom: 8 }}>
-            <RecipeListControls filters={filters} onChange={setFilters} />
+    <FlatList
+      ref={listRef}
+      data={displayed}
+      keyExtractor={(item) => item.id}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        paddingHorizontal: spacing.PADDING_HORIZONTAL,
+        paddingBottom: 100,
+        flexGrow: 1,
+      }}
+      ListEmptyComponent={
+        <View style={styles.empty}>
+          <View style={[styles.emptyIcon, { backgroundColor: colors.card }]}>
+            <Ionicons name="book-outline" size={32} color={colors.tabIconDefault} />
           </View>
-        }
-        contentContainerStyle={{
-          padding: spacing.PADDING_HORIZONTAL,
-          paddingTop: 16,
-          paddingBottom: 100,
-        }}
-        renderItem={({ item }) => (
-          <RecipeCard
-            recipe={item}
-            onPressCard={() => router.push({
-                            pathname: '/recipeScreens/viewRecipe',
-                            params: { recipeData: encodeURIComponent(JSON.stringify(item)) }
-                          })}
-            icon1Name="pencil-outline"
-            icon1Color={colors.primary}
-            onPressIcon1={() => handleEdit(item)}
-            icon2Name="trash-outline"
-            icon2Color={colors.error}
-            onPressIcon2={() => handleDelete(item.id)}
-            showLikes={false}
-          />
-        )}
-      />
-    </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            {filters.search || filters.veganOnly ? 'No matches' : 'No recipes yet'}
+          </Text>
+          <Text style={[styles.emptySub, { color: colors.tabIconDefault }]}>
+            {filters.search || filters.veganOnly
+              ? 'Try adjusting your filters'
+              : 'Tap + to create your first recipe'}
+          </Text>
+        </View>
+      }
+      renderItem={({ item }) => (
+        <RecipeCard
+          recipe={item}
+          onPressCard={() => router.push({
+            pathname: '/recipeScreens/viewRecipe',
+            params: { recipeData: encodeURIComponent(JSON.stringify(item)) },
+          })}
+          icon1Name="pencil-outline"
+          icon1Color={colors.primary}
+          onPressIcon1={() => handleEdit(item)}
+          icon2Name="trash-outline"
+          icon2Color={colors.error}
+          onPressIcon2={() => handleDelete(item.id)}
+          showLikes={false}
+        />
+      )}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: 10 },
+  emptyIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptySub: { fontSize: 13, textAlign: 'center', paddingHorizontal: 32 },
 });

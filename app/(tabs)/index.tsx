@@ -8,6 +8,8 @@ import { DatePickerModal } from '../../components/DatePickerModal';
 import { useDailyNutrition, getTodayString, dateToString } from '../../hooks/useDailyNutrition';
 import { CustomButton } from '../../components/CustomButton';
 import { router } from 'expo-router';
+import getDayLabel from '../../methods/utils/getDateLabel';
+import { CustomRowButton } from '../../components/customRowButton';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 
@@ -82,19 +84,17 @@ export default function HomeScreen() {
         ]}
       >
         {/* Calorie ring card — accepts dateString prop */}
-        <DailyCalorieCard dateString={selectedDate} style={styles.calorieCard} />
+        <View style={{marginBottom: 24}}>
+          <DailyCalorieCard dateString={selectedDate} style={styles.calorieCard} />
+          <CustomRowButton title='Add Food' onPress={() => router.push({
+            pathname: '/calorieScreens/addFoodIntermediate',
+            params: { dateString: selectedDate },
+          })} icon_name='arrow-forward-ios' />
+        </View>
 
         {/* Meal cards */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Meals</Text>
-        {MEAL_TYPES.map((mt) => (
-          <MealCard
-            key={mt}
-            mealType={mt}
-            summary={meals[mt]}
-            dateString={selectedDate}
-            
-          />
-        ))}
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Training for {getDayLabel(selectedDate)}</Text>
+
 
         <CustomButton onPress={() => router.push('../ApiDebug')} title='hi'/>
 
@@ -138,4 +138,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     marginBottom: 12,
   },
+  addFoodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  }
 });

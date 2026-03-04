@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../constants/Config';
 import { CustomButton } from '../../components/CustomButton';
 import { useCookTimer } from '../../context/CookTimerContext';
+import { doc } from 'firebase/firestore';
+import { auth, db } from '../../constants/FirebaseConfig';
 
 
 // ─── Timer Picker Modal ───────────────────────────────────────────────────────
@@ -157,6 +159,12 @@ export default function CookModeScreen() {
 
   const goNext = () => {
     if (isLast) {
+
+      // OPTIONAL
+
+      // in here add like a Count to make a good overview how often you cooked a recipe so you can 
+      // filter based on it 
+
       stopTimer();
       router.back();
     } else {

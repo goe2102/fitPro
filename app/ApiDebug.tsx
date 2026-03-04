@@ -10,15 +10,8 @@ export default function FoodApiDebug() {
   const [log, setLog] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const addLog = (msg: string) => {
-    console.log(msg); // <-- Prints to your terminal
-    setLog((prev) => [...prev, msg]); // <-- Prints to the screen
-  };
-
-  const clearLog = () => {
-    console.log('\n--- LOG CLEARED ---\n');
-    setLog([]);
-  };
+  const addLog = (msg: string) => setLog((prev) => [...prev, msg]);
+  const clearLog = () => setLog([]);
 
   const testEndpoint = async (label: string, url: string) => {
     addLog(`\n▶ ${label}`);
@@ -27,6 +20,7 @@ export default function FoodApiDebug() {
       const start = Date.now();
       const res = await fetch(url, {
         headers: { 'User-Agent': 'FitPro/1.0 (debug)' },
+        // No timeout — let it run as long as needed
       });
       addLog(`Status: ${res.status} (${Date.now() - start}ms)`);
 
@@ -58,6 +52,8 @@ export default function FoodApiDebug() {
       }
     } catch (err: any) {
       addLog(`❌ FETCH ERROR: ${err.message}`);
+      addLog(`❌ Error type: ${err.constructor?.name}`);
+      addLog(`❌ Full error: ${JSON.stringify(err)}`);
     }
   };
 
@@ -81,6 +77,18 @@ export default function FoodApiDebug() {
     await testEndpoint(
       'Barcode lookup (Nutella 3017620422003)',
       'https://world.openfoodfacts.org/api/v2/product/3017620422003.json?fields=code,product_name,product_name_de,brands,nutriments&lc=de'
+    );
+
+    // Test 4: Plain fetch to google to check if internet works at all
+    await testEndpoint(
+      'Connectivity check (google)',
+      'https://www.google.com'
+    );
+
+    // Test 5: Search-a-licious WITHOUT any extra params
+    await testEndpoint(
+      'Search-a-licious bare minimum',
+      'https://search.openfoodfacts.org/search?q=nutella'
     );
 
     setLoading(false);

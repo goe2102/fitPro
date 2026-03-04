@@ -88,10 +88,17 @@ export async function searchFoodByName(query: string): Promise<FoodSearchResult[
     `&page_size=24` +
     `&sort_by=unique_scans_n`;
 
-  const res = await fetch(url, {
-    headers: { 'User-Agent': USER_AGENT },
-    signal: AbortSignal.timeout(8000),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) throw new Error(`Search error: ${res.status}`);
   const data = await res.json();
@@ -109,13 +116,20 @@ export async function searchFoodByName(query: string): Promise<FoodSearchResult[
 // ─── Barcode lookup ───────────────────────────────────────────────────────────
 // Uses v2 product endpoint — confirmed working in debug (470ms, full nutriments)
 export async function lookupBarcode(barcode: string): Promise<FoodSearchResult | null> {
-  const res = await fetch(
-    `https://world.openfoodfacts.org/api/v2/product/${barcode}.json?lc=de`,
-    {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(8000),
-    }
-  );
+  const controller2 = new AbortController();
+  const timer2 = setTimeout(() => controller2.abort(), 8000);
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${barcode}.json?lc=de`,
+      {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: controller2.signal,
+      }
+    );
+  } finally {
+    clearTimeout(timer2);
+  }
 
   if (!res.ok) throw new Error(`Barcode error: ${res.status}`);
   const data = await res.json();
